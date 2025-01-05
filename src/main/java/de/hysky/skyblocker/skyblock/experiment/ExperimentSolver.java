@@ -6,8 +6,11 @@ import de.hysky.skyblocker.utils.container.SimpleContainerSolver;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
 import org.intellij.lang.annotations.Language;
 import org.jetbrains.annotations.NotNull;
 
@@ -52,6 +55,9 @@ public abstract sealed class ExperimentSolver extends SimpleContainerSolver perm
     public void reset() {
         state = State.REMEMBER;
         slots.clear();
+		ClientPlayerEntity player = MinecraftClient.getInstance().player;
+		if (player == null) return;
+		player.networkHandler.sendPacket(new CloseHandledScreenC2SPacket(player.currentScreenHandler.syncId));
     }
 
     protected abstract void tick(GenericContainerScreen screen);

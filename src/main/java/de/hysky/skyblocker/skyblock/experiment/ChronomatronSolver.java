@@ -1,19 +1,31 @@
 package de.hysky.skyblocker.skyblock.experiment;
 
+import com.mojang.logging.LogUtils;
 import de.hysky.skyblocker.config.configs.HelperConfig;
+import de.hysky.skyblocker.utils.IllegalUtils;
 import de.hysky.skyblocker.utils.render.gui.ColorHighlight;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
+import net.minecraft.client.network.ClientPlayNetworkHandler;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
+import net.minecraft.screen.ScreenHandler;
+import net.minecraft.screen.slot.Slot;
+import net.minecraft.screen.slot.SlotActionType;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class ChronomatronSolver extends ExperimentSolver {
 	public static final Object2ObjectMap<Item, Item> TERRACOTTA_TO_GLASS = Object2ObjectMaps.unmodifiable(
@@ -28,9 +40,10 @@ public final class ChronomatronSolver extends ExperimentSolver {
 	);
 
 	/**
-	 * The list of items to remember, in order.
+	 * The list of items & slots to remember, in order.
 	 */
 	private final List<Item> chronomatronSlots = new ArrayList<>();
+	private final List<Integer> chronomatronSlotIndexes = new ArrayList<>();
 	/**
 	 * The index of the current item shown in the chain, used for remembering.
 	 */
@@ -38,7 +51,16 @@ public final class ChronomatronSolver extends ExperimentSolver {
 	/**
 	 * The slot id of the current item shown, used for detecting when the experiment finishes showing the current item.
 	 */
-	private int chronomatronCurrentSlot;
+	private int chronomatronLatestSlot;
+	/**
+	 * Timestamp when the last click happened.
+	 * Used for delay
+	 */
+	private long lastClickedTimeStampMillis;
+	/**
+	 * A random delay to make detecting more difficult.
+	 */
+	private long randomDelay = (long)(Math.random() * 250);
 	/**
 	 * The next index in the chain to click.
 	 */
@@ -60,7 +82,7 @@ public final class ChronomatronSolver extends ExperimentSolver {
 			case REMEMBER -> {
 				Inventory inventory = screen.getScreenHandler().getInventory();
 				// Only try to look for items with enchantment glint if there is no item being currently shown.
-				if (chronomatronCurrentSlot == 0) {
+				if (chronomatronLatestSlot == 0) {
 					for (int index = 10; index < 43; index++) {
 						if (inventory.getStack(index).hasGlint()) {
 							// If the list of items is smaller than the index of the current item shown, add the item to the list and set the state to wait.
@@ -72,25 +94,39 @@ public final class ChronomatronSolver extends ExperimentSolver {
 								chronomatronChainLengthCount++;
 							}
 							// Remember the slot shown to detect when the experiment finishes showing the current item.
-							chronomatronCurrentSlot = index;
+							chronomatronLatestSlot = index;
 							return;
 						}
 					}
 					// If the current item shown no longer has enchantment glint, the experiment finished showing the current item.
-				} else if (!inventory.getStack(chronomatronCurrentSlot).hasGlint()) {
-					chronomatronCurrentSlot = 0;
+				} else if (!inventory.getStack(chronomatronLatestSlot).hasGlint()) {
+					chronomatronLatestSlot = 0;
 				}
 			}
 			case WAIT -> {
 				if (screen.getScreenHandler().getInventory().getStack(49).getName().getString().startsWith("Timer: ")) {
 					setState(State.SHOW);
+					lastClickedTimeStampMillis = System.currentTimeMillis();
 				}
+			}
+			case SHOW -> {
+				if (System.currentTimeMillis() - lastClickedTimeStampMillis < 500 + randomDelay) return;
+				if (chronomatronSlotIndexes.size() < chronomatronSlots.size()) chronomatronSlotIndexes.add(chronomatronLatestSlot);
+
+				int index = chronomatronSlotIndexes.get(chronomatronCurrentOrdinal);
+				IllegalUtils.sendMiddleClick(screen, index);
+
+				ScreenHandler screenHandler = screen.getScreenHandler();
+				onClickSlot(index, screenHandler.getSlot(index).getStack(), screenHandler.syncId);
+
+				lastClickedTimeStampMillis = System.currentTimeMillis();
+				randomDelay = (long)(Math.random() * 250);
 			}
 			case END -> {
 				String name = screen.getScreenHandler().getInventory().getStack(49).getName().getString();
 				if (!name.startsWith("Timer: ")) {
 					// Get ready for another round if the instructions say to remember the pattern.
-					if (name.equals("Remember the pattern!")) {
+					if (name.equals("Remember the pattern!") && chronomatronCurrentOrdinal < 9) {
 						chronomatronChainLengthCount = 0;
 						chronomatronCurrentOrdinal = 0;
 						setState(State.REMEMBER);
@@ -139,8 +175,9 @@ public final class ChronomatronSolver extends ExperimentSolver {
 	public void reset() {
 		chronomatronSlots.clear();
 		chronomatronChainLengthCount = 0;
-		chronomatronCurrentSlot = 0;
+		chronomatronLatestSlot = 0;
 		chronomatronCurrentOrdinal = 0;
+		chronomatronSlotIndexes.clear();
 		super.reset();
 	}
 }

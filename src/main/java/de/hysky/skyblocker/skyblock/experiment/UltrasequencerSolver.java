@@ -1,6 +1,8 @@
 package de.hysky.skyblocker.skyblock.experiment;
 
+import com.mojang.logging.LogUtils;
 import de.hysky.skyblocker.config.configs.HelperConfig;
+import de.hysky.skyblocker.utils.IllegalUtils;
 import de.hysky.skyblocker.utils.container.ContainerSolverManager;
 import de.hysky.skyblocker.utils.render.gui.ColorHighlight;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
@@ -10,6 +12,7 @@ import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
+import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.util.DyeColor;
 
@@ -17,9 +20,11 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
 
 public final class UltrasequencerSolver extends ExperimentSolver {
 	public static final UltrasequencerSolver INSTANCE = new UltrasequencerSolver();
+
 	/**
 	 * The playable slots of Ultrasequencer in the Metaphysical level.
 	 * 
@@ -32,6 +37,18 @@ public final class UltrasequencerSolver extends ExperimentSolver {
 	 * The slot id of the next slot to click.
 	 */
 	private int ultrasequencerNextSlot;
+
+	/**
+	 * Timestamp when the last click happened.
+	 * Used for delay
+	 */
+	private long lastClickedTimeStampMillis;
+
+	/**
+	 * A random delay to make detecting more difficult.
+	 */
+	private long randomDelay = (long)(Math.random() * 250);
+
 	/**
 	 * Saves the {@link DyeColor} instance corresponding to the color of the pane showed in the screen as it changes each round.
 	 * Used for detecting when the round ends.
@@ -81,12 +98,24 @@ public final class UltrasequencerSolver extends ExperimentSolver {
 					//This doesn't trigger the markDirty method in this class as the pane color is already updated
 					//as the chain goes END -> REMEMBER -> WAIT
 					ContainerSolverManager.markHighlightsDirty();
+					lastClickedTimeStampMillis = System.currentTimeMillis();
 				}
+			}
+			case SHOW -> {
+				if (System.currentTimeMillis() - lastClickedTimeStampMillis < 250 + randomDelay) return;
+
+				IllegalUtils.sendMiddleClick(screen, ultrasequencerNextSlot);
+
+				ScreenHandler screenHandler = screen.getScreenHandler();
+				onClickSlot(ultrasequencerNextSlot, screenHandler.getSlot(ultrasequencerNextSlot).getStack(), screenHandler.syncId);
+
+				lastClickedTimeStampMillis = System.currentTimeMillis();
+				randomDelay = (long)(Math.random() * 250);
 			}
 			case END -> {
 				String name = screen.getScreenHandler().getInventory().getStack(49).getName().getString();
 				if (!name.startsWith("Timer: ")) {
-					if (name.equals("Remember the pattern!")) {
+					if (name.equals("Remember the pattern!")&& getSlots().get(ultrasequencerNextSlot).getCount() + 1 <= 6) {
 						getSlots().clear();
 						setState(State.REMEMBER);
 					} else {
