@@ -14,11 +14,14 @@ import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
 import org.intellij.lang.annotations.Language;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.logging.Logger;
+
 /**
  * The general class for all experiment solvers, implemented with a state machine.
  */
 public abstract sealed class ExperimentSolver extends SimpleContainerSolver permits ChronomatronSolver, SuperpairsSolver, UltrasequencerSolver {
-    private State state = State.REMEMBER;
+    protected final Logger LOGGER = Logger.getLogger(this.getClass().getName());
+	private State state = State.REMEMBER;
     private final Int2ObjectMap<ItemStack> slots = new Int2ObjectOpenHashMap<>();
 
     protected ExperimentSolver(@NotNull @Language("RegExp") String containerName) {
@@ -55,10 +58,14 @@ public abstract sealed class ExperimentSolver extends SimpleContainerSolver perm
     public void reset() {
         state = State.REMEMBER;
         slots.clear();
-		ClientPlayerEntity player = MinecraftClient.getInstance().player;
-		if (player == null) return;
-		player.networkHandler.sendPacket(new CloseHandledScreenC2SPacket(player.currentScreenHandler.syncId));
     }
+
+	/**
+	 * Get the Status or Title of the current Chronomatron Screen
+	 */
+	protected String getTitle(GenericContainerScreen screen) {
+		return screen.getScreenHandler().getInventory().getStack(49).getName().getString();
+	}
 
     protected abstract void tick(GenericContainerScreen screen);
 

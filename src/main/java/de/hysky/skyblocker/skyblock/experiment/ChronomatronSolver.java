@@ -84,37 +84,34 @@ public final class ChronomatronSolver extends ExperimentSolver {
 				// Only try to look for items with enchantment glint if there is no item being currently shown.
 				if (chronomatronLatestSlot == 0) {
 					for (int index = 10; index < 43; index++) {
-						if (inventory.getStack(index).hasGlint()) {
-							// If the list of items is smaller than the index of the current item shown, add the item to the list and set the state to wait.
-							if (chronomatronSlots.size() <= chronomatronChainLengthCount) {
-								chronomatronSlots.add(TERRACOTTA_TO_GLASS.get(inventory.getStack(index).getItem()));
-								setState(State.WAIT);
-							} else {
-								// If the item is already in the list, increment the current item shown index.
-								chronomatronChainLengthCount++;
-							}
-							// Remember the slot shown to detect when the experiment finishes showing the current item.
-							chronomatronLatestSlot = index;
-							return;
-						}
+						if (!inventory.getStack(index).hasGlint()) continue;
+
+						// If the list of items is smaller than the index of the current item shown, add the item to the list and set the state to wait.
+						if (chronomatronSlots.size() <= chronomatronChainLengthCount) {
+							chronomatronSlots.add(TERRACOTTA_TO_GLASS.get(inventory.getStack(index).getItem()));
+							setState(State.WAIT);
+						} else chronomatronChainLengthCount++;
+
+						// Remember the slot shown to detect when the experiment finishes showing the current item.
+						chronomatronLatestSlot = index;
+						return;
 					}
 					// If the current item shown no longer has enchantment glint, the experiment finished showing the current item.
-				} else if (!inventory.getStack(chronomatronLatestSlot).hasGlint()) {
+				} else if (!inventory.getStack(chronomatronLatestSlot).hasGlint())
 					chronomatronLatestSlot = 0;
-				}
 			}
 			case WAIT -> {
-				if (screen.getScreenHandler().getInventory().getStack(49).getName().getString().startsWith("Timer: ")) {
-					setState(State.SHOW);
-					lastClickedTimeStampMillis = System.currentTimeMillis();
-				}
+				if (!getTitle(screen).startsWith("Timer: ")) return;
+
+				setState(State.SHOW);
+				lastClickedTimeStampMillis = System.currentTimeMillis();
 			}
 			case SHOW -> {
 				if (System.currentTimeMillis() - lastClickedTimeStampMillis < 500 + randomDelay) return;
 				if (chronomatronSlotIndexes.size() < chronomatronSlots.size()) chronomatronSlotIndexes.add(chronomatronLatestSlot);
 
 				int index = chronomatronSlotIndexes.get(chronomatronCurrentOrdinal);
-				IllegalUtils.sendMiddleClick(screen, index);
+				if (!IllegalUtils.sendMiddleClick(screen, index)) return;
 
 				ScreenHandler screenHandler = screen.getScreenHandler();
 				onClickSlot(index, screenHandler.getSlot(index).getStack(), screenHandler.syncId);
@@ -123,17 +120,17 @@ public final class ChronomatronSolver extends ExperimentSolver {
 				randomDelay = (long)(Math.random() * 250);
 			}
 			case END -> {
-				String name = screen.getScreenHandler().getInventory().getStack(49).getName().getString();
-				if (!name.startsWith("Timer: ")) {
-					// Get ready for another round if the instructions say to remember the pattern.
-					if (name.equals("Remember the pattern!") && chronomatronCurrentOrdinal < 9) {
-						chronomatronChainLengthCount = 0;
-						chronomatronCurrentOrdinal = 0;
-						setState(State.REMEMBER);
-					} else {
-						reset();
-					}
+				if (getTitle(screen).startsWith("Timer: ")) {
+					if (chronomatronCurrentOrdinal < 9) IllegalUtils.sendCloseScreen();
+					return;
 				}
+
+				// Get ready for another round if the instructions say to remember the pattern.
+				if (getTitle(screen).equals("Remember the pattern!")) {
+					chronomatronChainLengthCount = 0;
+					chronomatronCurrentOrdinal = 0;
+					setState(State.REMEMBER);
+				} else reset();
 			}
 		}
 	}

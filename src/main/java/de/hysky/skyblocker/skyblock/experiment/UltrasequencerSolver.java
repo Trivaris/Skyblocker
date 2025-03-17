@@ -1,6 +1,5 @@
 package de.hysky.skyblocker.skyblock.experiment;
 
-import com.mojang.logging.LogUtils;
 import de.hysky.skyblocker.config.configs.HelperConfig;
 import de.hysky.skyblocker.utils.IllegalUtils;
 import de.hysky.skyblocker.utils.container.ContainerSolverManager;
@@ -20,7 +19,6 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
 
 public final class UltrasequencerSolver extends ExperimentSolver {
 	public static final UltrasequencerSolver INSTANCE = new UltrasequencerSolver();
@@ -105,7 +103,6 @@ public final class UltrasequencerSolver extends ExperimentSolver {
 				if (System.currentTimeMillis() - lastClickedTimeStampMillis < 250 + randomDelay) return;
 
 				IllegalUtils.sendMiddleClick(screen, ultrasequencerNextSlot);
-
 				ScreenHandler screenHandler = screen.getScreenHandler();
 				onClickSlot(ultrasequencerNextSlot, screenHandler.getSlot(ultrasequencerNextSlot).getStack(), screenHandler.syncId);
 
@@ -113,15 +110,19 @@ public final class UltrasequencerSolver extends ExperimentSolver {
 				randomDelay = (long)(Math.random() * 250);
 			}
 			case END -> {
-				String name = screen.getScreenHandler().getInventory().getStack(49).getName().getString();
-				if (!name.startsWith("Timer: ")) {
-					if (name.equals("Remember the pattern!")&& getSlots().get(ultrasequencerNextSlot).getCount() + 1 <= 6) {
-						getSlots().clear();
-						setState(State.REMEMBER);
-					} else {
-						reset();
+				if (getTitle(screen).startsWith("Timer: ")) {
+					if (getSlots().get(ultrasequencerNextSlot).getCount() + 1 <= 6) {
+						IllegalUtils.sendCloseScreen();
+						LOGGER.info("Ultrasequencer solver ended, " + getSlots().get(ultrasequencerNextSlot).getCount() + 1);
 					}
+					return;
 				}
+
+				if (getTitle(screen).equals("Remember the pattern!")) {
+					getSlots().clear();
+					setState(State.REMEMBER);
+				} else reset();
+
 			}
 		}
 	}
